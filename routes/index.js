@@ -26,10 +26,7 @@ router.get('/', async(req, res, next) => {
             $arrayElemAt: ['$Scores.Scores', 0]
           }
         }
-      },
-      {
-        $unwind:'$Scores'
-      },
+      }
     ]).toArray()
     console.log(candidates);
     res.status(200).json(candidates);
@@ -67,7 +64,8 @@ router.post('/addscore/:id', (req, res) => {
       Test1:  parseInt(req.body.Test1) ,
       Test2: parseInt(req.body.Test2),
       Test3: parseInt(req.body.Test3)
-    }
+    },
+    Total:parseInt(req.body.Test1+req.body.Test2+req.body.Test3)
   }
   try {
     db.get().collection(collection.SCORE_COLLECTION).insertOne(testScores).then((response) => {
@@ -80,11 +78,35 @@ router.post('/addscore/:id', (req, res) => {
 
 router.get('/topscorer', async (req, res) => {
   try {
-    let top = await db.get().collection(collection.SCORE_COLLECTION).aggregate([
-      // {
-      //   $group:
-      // }
-    ])
+    let topper = await db.get().collection(collection.SCORE_COLLECTION).aggregate([
+      {
+        $sort:{
+          Total:-1
+        }
+      },
+      {
+        $limit:1
+      },
+      {
+        $lookup:{
+          from:collection.CANDIDATE_COLLECTION,
+          localField:'Candidate',
+          foreignField:'_id',
+          as:"candidate"
+        }
+      },
+      {
+        $project:{
+          _id:0,
+          candidate:{
+            $arrayElemAt: ['$candidate', 0]
+          },
+          Scores:1
+        }
+      }
+    ]).toArray()
+    console.log(topper);
+    res.status(200).json(topper)
   } catch (err) {
     res.status(500).json({ msg: err.message })
   }
@@ -94,7 +116,20 @@ router.get('/average', (req, res) => {
   try{
     db.get().collection(collection.SCORE_COLLECTION).aggregate([
       {
-        $group:{_id:"$_id"}
+        $group:{
+          _id:0,
+          Test1avg:{$avg:'$Scores.Test1'},
+          Test2avg:{$avg:'$Scores.Test2'},
+          Test3avg:{$avg:'$Scores.Test3'}
+        }
+      },
+      {
+        $project:{
+          _id:0,
+          Test1avg:{$round:['$Test1avg',1]},
+          Test2avg:{$round:['$Test2avg',1]},
+          Test3avg:{$round:['$Test3avg',1]}
+        }
       }
     ])
     .toArray()
